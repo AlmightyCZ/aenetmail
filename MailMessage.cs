@@ -23,6 +23,34 @@ namespace AE.Net.Mail {
 		Draft = 16
 	}
 
+	internal class StreamWrapper
+	{
+
+		private readonly Stream stream;
+		private readonly  StringBuilder sbRawMessage = new StringBuilder();
+
+		public StreamWrapper(Stream stream)
+		{
+			this.stream = stream;
+		}
+
+		public string RawMessage => sbRawMessage.ToString();
+
+		public string ReadLine(ref int maxLength, Encoding encoding, char? termChar)
+		{
+			string line = stream.ReadLine(ref maxLength, encoding, termChar);
+			sbRawMessage.AppendLine(line);
+			return line;
+		}
+
+		public string ReadToEnd(int maxLength, Encoding encoding)
+		{
+			string result = stream.ReadToEnd(maxLength, encoding);
+			sbRawMessage.Append(result);
+			return result;
+		}
+	}
+
 	public class MailMessage : ObjectWHeaders {
 		public static implicit operator System.Net.Mail.MailMessage(MailMessage msg) {
 			var ret = new System.Net.Mail.MailMessage();
@@ -74,6 +102,7 @@ namespace AE.Net.Mail {
 		public virtual MailAddress Sender { get; set; }
 		public virtual string MessageID { get; set; }
 		public virtual string Uid { get; internal set; }
+		public virtual string Raw { get; private set; }
 		public virtual MailPriority Importance { get; set; }
 
 		public virtual void Load(string message, bool headersOnly = false) {
@@ -83,7 +112,14 @@ namespace AE.Net.Mail {
 			}
 		}
 
-		public virtual void Load(Stream reader, bool headersOnly = false, int maxLength = 0, char? termChar = null)
+		public virtual void Load(Stream stream, bool headersOnly = false, int maxLength = 0, char? termChar = null)
+		{
+			StreamWrapper reader = new StreamWrapper(stream);
+			Load(reader, headersOnly, maxLength, termChar);
+			Raw = reader.RawMessage;
+		}
+
+		private void Load(StreamWrapper reader, bool headersOnly = false, int maxLength = 0, char? termChar = null)
 		{
 			_HeadersOnly = headersOnly;
 			Headers = null;
@@ -151,7 +187,7 @@ namespace AE.Net.Mail {
 			Subject = Headers["Subject"].RawValue;
 		}
 
-		private static string ParseMime(Stream reader, string boundary, ref int maxLength, ICollection<Attachment> attachments, Encoding encoding, char? termChar) {
+		private static string ParseMime(StreamWrapper reader, string boundary, ref int maxLength, ICollection<Attachment> attachments, Encoding encoding, char? termChar) {
 			var maxLengthSpecified = maxLength > 0;
 			string data = null,
 					bounderInner = "--" + boundary,
@@ -216,18 +252,18 @@ namespace AE.Net.Mail {
 			}).Sum();
 		}
 
-        public virtual void Save(System.IO.Stream stream, Encoding encoding = null)
-        {
+		public virtual void Save(System.IO.Stream stream, Encoding encoding = null)
+		{
 #if NET45
 			using (var str = new System.IO.StreamWriter(stream, encoding ?? System.Text.Encoding.Default, 8096, true)) {
 				Save(str);
-            }
+			}
 #else
-            var str = new System.IO.StreamWriter(stream, encoding ?? System.Text.Encoding.Default);
-            Save(str);
-            str.Flush();
+			var str = new System.IO.StreamWriter(stream, encoding ?? System.Text.Encoding.Default);
+			Save(str);
+			str.Flush();
 #endif
-        } 
+		} 
 
 		private static readonly string[] SpecialHeaders = "Date,To,Cc,Reply-To,Bcc,Sender,From,Message-ID,Importance,Subject".Split(',');
 		public virtual void Save(System.IO.TextWriter txt) {
