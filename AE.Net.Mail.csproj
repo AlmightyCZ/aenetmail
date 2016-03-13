@@ -63,6 +63,7 @@
   <ItemGroup>
     <Compile Include="AlternateViewCollection.cs" />
     <Compile Include="Attachment.cs" />
+    <Compile Include="IceImapClient.cs" />
     <Compile Include="ImapClientException.cs" />
     <Compile Include="ImapClientExceptionEventArgs.cs" />
     <Compile Include="HeaderDictionary.cs" />

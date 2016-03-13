@@ -57,7 +57,7 @@ namespace AE.Net.Mail
             }
         }
 
-        private string GetTag()
+        protected string GetTag()
         {
             _tag++;
             return string.Format("xm{0:000} ", _tag);
@@ -416,9 +416,9 @@ namespace AE.Net.Mail
             return GetMessages(startUID, endUID, true, headersonly, setseen);
         }
 
-        public virtual MailMessage[] GetMessages(int startIndex, int endIndex, bool headersonly = true, bool setseen = false)
+        public virtual MailMessage[] GetMessages(int startIndex, int endIndex, bool headersonly = true, bool setseen = false, long? modSeq = null)
         {
-            return GetMessages((startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen);
+            return GetMessages((startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen, modSeq);
         }
 
         public virtual void DownloadMessage(System.IO.Stream stream, int index, bool setseen)
@@ -439,7 +439,7 @@ namespace AE.Net.Mail
             });
         }
 
-        public virtual MailMessage[] GetMessages(string start, string end, bool uid, bool headersonly, bool setseen)
+        public virtual MailMessage[] GetMessages(string start, string end, bool uid, bool headersonly, bool setseen, long? modSeq = null)
         {
             var x = new List<MailMessage>();
 
@@ -462,7 +462,7 @@ namespace AE.Net.Mail
                 x.Add(mail);
 
                 return mail;
-            });
+            }, modSeq);
 
             return x.ToArray();
         }
@@ -492,17 +492,22 @@ namespace AE.Net.Mail
             });
         }
 
-        public virtual void GetMessages(string start, string end, bool uid, bool uidsonly, bool headersonly, bool setseen, Func<System.IO.Stream, int, NameValueCollection, MailMessage> action)
+        public virtual void GetMessages(string start, string end, bool uid, bool uidsonly, bool headersonly, bool setseen, Func<System.IO.Stream, int, NameValueCollection, MailMessage> action, long? modSeq=null)
         {
             CheckMailboxSelected();
             IdlePause();
 
             string tag = GetTag();
             string command = tag + (uid ? "UID " : null)
-                    + "FETCH " + start + ":" + end + " ("
+                    + "FETCH " + start + ":" + (!modSeq.HasValue ? end : "*") + " ("
                     + _FetchHeaders + "UID FLAGS"
                     + (uidsonly ? null : (setseen ? " BODY[" : " BODY.PEEK[") + (headersonly ? "HEADER]" : "]"))
                     + ")";
+
+            if (modSeq.HasValue)
+            {
+                command += $" (CHANGEDSINCE {modSeq.Value})";
+            }
 
             string response;
 
@@ -858,7 +863,7 @@ namespace AE.Net.Mail
 
                     else if ((match = Regex.Match(response, @"UIDVALIDITY (\d+)")).Success)
                         mailbox.UIDValidity = match.Groups[1].Value.ToInt();
-
+       
 
                     else if (response.StartsWith("* CAPABILITY "))
                     {
