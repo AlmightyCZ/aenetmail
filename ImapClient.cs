@@ -863,7 +863,9 @@ namespace AE.Net.Mail
 
                     else if ((match = Regex.Match(response, @"UIDVALIDITY (\d+)")).Success)
                         mailbox.UIDValidity = match.Groups[1].Value.ToInt();
-       
+
+                    else if ((match = Regex.Match(response, @"HIGHESTMODSEQ (\d+)")).Success)
+                        mailbox.HighestModSeq = Convert.ToInt64(match.Groups[1].Value);
 
                     else if (response.StartsWith("* CAPABILITY "))
                     {
