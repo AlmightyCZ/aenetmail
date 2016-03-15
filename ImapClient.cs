@@ -857,6 +857,8 @@ namespace AE.Net.Mail
 
                     else if ((match = Regex.Match(response, @"(?<=UNSEEN\s+)\d+")).Success)
                         mailbox.NumUnSeen = match.Value.ToInt();
+                    else if ((match = Regex.Match(response, @"(\d+) UNSEEN")).Success)
+                        mailbox.NumUnSeen = match.Groups[1].Value.ToInt();
 
                     else if ((match = Regex.Match(response, @"(?<=\sFLAGS\s+\().*?(?=\))")).Success)
                         mailbox.SetFlags(match.Value);
