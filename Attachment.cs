@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace AE.Net.Mail {
 	public class Attachment : ObjectWHeaders {
@@ -30,7 +31,7 @@ namespace AE.Net.Mail {
 		}
 
 		private string _ContentDisposition;
-		private string ContentDisposition {
+		public string ContentDisposition {
 			get { return _ContentDisposition ?? (_ContentDisposition = Headers["Content-Disposition"].Value.ToLower()); }
 		}
 
@@ -40,6 +41,15 @@ namespace AE.Net.Mail {
 			get {
 				return ContentDisposition == "attachment" || !string.IsNullOrEmpty(Filename);
 			}
+		}
+
+		public override Encoding Encoding
+		{
+			get
+			{
+				return IsAttachment ? _DefaultEncoding : base.Encoding;
+			}
+			set { base.Encoding = value; }
 		}
 
 		public virtual void Save(string filename) {
