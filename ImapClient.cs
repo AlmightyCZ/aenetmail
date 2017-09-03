@@ -20,6 +20,8 @@ namespace AE.Net.Mail
 
     public class ImapClient : TextClient, IMailClient
     {
+        protected const int MAX_MSG_PER_CALLBACK = 20;
+
         private string _SelectedMailbox;
         private Mailbox _Mailbox;
         private int _tag = 0;
@@ -403,22 +405,40 @@ namespace AE.Net.Mail
 
         public virtual MailMessage GetMessage(int index, bool headersonly, bool setseen)
         {
-            return GetMessages(index, index, headersonly, setseen).FirstOrDefault();
+            MailMessage msg = null;
+            Action<MailMessage[]> processCallback = messages =>
+            {
+                if (msg != null && messages.Length > 0)
+                {
+                    msg = messages[0];
+                }
+            };
+            GetMessages(processCallback, index, index, headersonly, setseen);
+            return msg;
         }
 
         public virtual MailMessage GetMessage(string uid, bool headersonly, bool setseen)
         {
-            return GetMessages(uid, uid, headersonly, setseen).FirstOrDefault();
+            MailMessage msg = null;
+            Action<MailMessage[]> processCallback = messages =>
+            {
+                if (msg == null && messages.Length > 0)
+                {
+                    msg = messages[0];
+                }
+            };
+            GetMessages(processCallback, uid, uid, headersonly, setseen);
+            return msg;
         }
 
-        public virtual MailMessage[] GetMessages(string startUID, string endUID, bool headersonly = true, bool setseen = false)
+        public virtual void GetMessages(Action<MailMessage[]> processCallback, string startUID, string endUID, bool headersonly = true, bool setseen = false)
         {
-            return GetMessages(startUID, endUID, true, headersonly, setseen);
+            GetMessages(processCallback, startUID, endUID, true, headersonly, setseen);
         }
 
-        public virtual MailMessage[] GetMessages(int startIndex, int endIndex, bool headersonly = true, bool setseen = false, long? modSeq = null)
+        public virtual void GetMessages(Action<MailMessage[]> processCallback, int startIndex, int endIndex, bool headersonly = true, bool setseen = false, long? modSeq = null)
         {
-            return GetMessages((startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen, modSeq);
+            GetMessages(processCallback, (startIndex + 1).ToString(), (endIndex + 1).ToString(), false, headersonly, setseen, modSeq);
         }
 
         public virtual void DownloadMessage(System.IO.Stream stream, int index, bool setseen)
@@ -439,14 +459,17 @@ namespace AE.Net.Mail
             });
         }
 
-        public virtual MailMessage[] GetMessages(string start, string end, bool uid, bool headersonly, bool setseen, long? modSeq = null)
+        public virtual void GetMessages(Action<MailMessage[]> processCallback, string start, string end, bool uid, bool headersonly, bool setseen, long? modSeq = null)
         {
             var x = new List<MailMessage>();
 
             GetMessages(start, end, uid, false, headersonly, setseen, (stream, size, imapHeaders) =>
             {
-                var mail = new MailMessage { Encoding = Encoding };
-                mail.Size = size;
+                var mail = new MailMessage
+                {
+                    Encoding = Encoding,
+                    Size = size
+                };
 
                 if (imapHeaders["UID"] != null)
                     mail.Uid = imapHeaders["UID"];
@@ -460,11 +483,17 @@ namespace AE.Net.Mail
                     mail.Headers.Add(key, new HeaderValue(imapHeaders[key]));
 
                 x.Add(mail);
+                if (x.Count >= MAX_MSG_PER_CALLBACK)
+                {
+                    MailMessage[] mailMessageArray = x.ToArray();
+                    processCallback(mailMessageArray);
+                    x.Clear();
+                }
 
                 return mail;
             }, modSeq);
 
-            return x.ToArray();
+            processCallback(x.ToArray());
         }
 
         public virtual void GetMessages(string start, string end, bool uid, bool uidsonly, bool headersonly, bool setseen, Action<MailMessage> processCallback)
@@ -492,7 +521,7 @@ namespace AE.Net.Mail
             });
         }
 
-        public virtual void GetMessages(string start, string end, bool uid, bool uidsonly, bool headersonly, bool setseen, Func<System.IO.Stream, int, NameValueCollection, MailMessage> action, long? modSeq=null)
+        public virtual void GetMessages(string start, string end, bool uid, bool uidsonly, bool headersonly, bool setseen, Func<System.IO.Stream, int, NameValueCollection, MailMessage> action, long? modSeq = null)
         {
             CheckMailboxSelected();
             IdlePause();
@@ -877,7 +906,7 @@ namespace AE.Net.Mail
 
                     else if (response.StartsWith("* OK"))
                     {
-                        
+
                     }
 
                     else return response;
@@ -968,7 +997,12 @@ namespace AE.Net.Mail
 
         internal bool IsResultOK(string response)
         {
-            response = response.Substring(response.IndexOf(" ")).Trim();
+            int spaceIdx = response.IndexOf(" ");
+            if (spaceIdx >= 0)
+            {
+                response = response.Substring(spaceIdx);
+            }
+            response = response.Trim();
             return response.ToUpper().StartsWith("OK");
         }
     }
