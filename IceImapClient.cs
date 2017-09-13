@@ -39,6 +39,12 @@ namespace AE.Net.Mail
                 }
 
                 MailMessage message = GetMessage(uid, false, false);
+
+                if (message == null)
+                {
+                    throw new BranoNullMessageException("Spojení přerušeno. MSG NULL"); //Speciální výjimka, která slouží k opakovanýcm pokusům
+                }
+
                 if (message.Date >= changed)
                 {
                     list.Add(message);
@@ -53,9 +59,22 @@ namespace AE.Net.Mail
             processCallback(list.ToArray());
         }
 
+
         public void GetMessagesByModSeq(Action<MailMessage[]> processCallback, long modSeq)
         {
             GetMessages(processCallback, 0, 0, false, false, modSeq);
         }
+
+        public class BranoNullMessageException : Exception
+        {
+            public BranoNullMessageException()
+            {
+            }
+
+            public BranoNullMessageException(string message) : base(message)
+            {
+            }
+        }
+
     }
 }
